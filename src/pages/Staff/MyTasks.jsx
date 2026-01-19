@@ -1,45 +1,35 @@
-// src/pages/Staff/MyTasks.jsx
-import React, { useState } from 'react';
+import React from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { useData } from '../../context/DataContext';
 
 const MyTasks = () => {
-  // Giả lập dữ liệu công việc được giao
-  const [tasks, setTasks] = useState([
-    { id: 1, title: 'Soạn giáo án lớp Tiếng Anh', progress: 30 },
-    { id: 2, title: 'Kiểm kê kho sách', progress: 0 },
-  ]);
+  const { user } = useAuth();
+  const { tasks, updateTaskProgress } = useData();
 
-  const handleProgressChange = (id, newProgress) => {
-    setTasks(tasks.map(t => 
-      t.id === id ? { ...t, progress: newProgress } : t
-    ));
-  };
-
-  const handleSave = () => {
-    alert("Đã cập nhật tiến độ lên hệ thống!");
-    // Gọi API để lưu dữ liệu xuống database
-  };
+  // Lọc task của user hiện tại
+  const myTasks = tasks.filter(t => t.assigneeId === user.id);
 
   return (
-    <div className="task-container">
-      <h2>Danh sách đầu việc cần làm</h2>
-      <div className="task-list">
-        {tasks.map(task => (
-          <div key={task.id} className="task-item" style={{ border: '1px solid #ccc', margin: '10px', padding: '10px' }}>
-            <h3>{task.title}</h3>
-            <label>Tiến độ: {task.progress}%</label>
-            <input 
-              type="range" 
-              min="0" max="100" 
-              value={task.progress} 
-              onChange={(e) => handleProgressChange(task.id, parseInt(e.target.value))}
-              style={{ width: '100%' }}
-            />
-          </div>
-        ))}
-      </div>
-      <button onClick={handleSave} style={{ marginTop: '20px', padding: '10px 20px' }}>
-        Lưu báo cáo
-      </button>
+    <div>
+      <h2>Công việc của tôi</h2>
+      {myTasks.length === 0 ? <p>Hiện chưa có công việc được giao.</p> : (
+        <div style={{ display: 'grid', gap: '15px' }}>
+          {myTasks.map(task => (
+            <div key={task.id} style={{ border: '1px solid #ccc', padding: '15px', borderRadius: '8px', background: 'white' }}>
+              <h4>{task.title}</h4>
+              <label>Mức độ hoàn thành: <strong>{task.progress}%</strong></label>
+              <br />
+              <input 
+                type="range" 
+                min="0" max="100" 
+                value={task.progress} 
+                onChange={(e) => updateTaskProgress(task.id, parseInt(e.target.value))}
+                style={{ width: '100%', marginTop: '10px' }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
