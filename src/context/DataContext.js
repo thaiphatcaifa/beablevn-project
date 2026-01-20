@@ -3,51 +3,79 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 const DataContext = createContext(null);
 
 export const DataProvider = ({ children }) => {
+  // Hàm helper cho các dữ liệu chưa chuyển sang DB (như tasks, settings...)
   const getInitialData = (key, defaultValue) => {
     const saved = localStorage.getItem(key);
     return saved ? JSON.parse(saved) : defaultValue;
   };
 
-  // 1. Dữ liệu Staff (Mặc định thêm các Admin mẫu để test)
-  const [staffList, setStaffList] = useState(() => getInitialData('staffList', [
-    { id: 1, username: 'chief', password: '123', name: 'Sếp Tổng', role: 'chief', status: 'active' },
-    { id: 2, username: 'reg', password: '123', name: 'Trưởng Ban Kỷ Luật', role: 'reg', status: 'active' },
-    { id: 3, username: 'op', password: '123', name: 'Trưởng Vận Hành', role: 'op', status: 'active' },
-    { id: 4, username: 'nv1', password: '123', name: 'Nguyễn Văn A', role: 'staff', status: 'active' },
-  ]));
+  // --- 1. Dữ liệu Staff (Chuyển sang dùng JSON Server) ---
+  const [staffList, setStaffList] = useState([]);
+  const API_URL = 'http://localhost:5000/staff';
 
-  // 2. Danh sách hình thức kỷ luật (Do Reg quản lý)
-  const [disciplineTypes, setDisciplineTypes] = useState(() => getInitialData('disciplineTypes', [
-    'Trừ 10% KPI', 'Cảnh cáo toàn công ty', 'Trừ 1 ngày lương', 'Sa thải'
-  ]));
+  // Load danh sách nhân sự từ file db.json khi app chạy
+  useEffect(() => {
+    fetch(API_URL)
+      .then(res => res.json())
+      .then(data => setStaffList(data))
+      .catch(err => console.error("Không kết nối được với JSON Server:", err));
+  }, []);
 
-  // 3. Danh sách đề xuất kỷ luật (Op đề xuất -> Reg duyệt)
+  // --- 2. Các dữ liệu khác (Vẫn giữ LocalStorage tạm thời) ---
+  const [disciplineTypes, setDisciplineTypes] = useState(() => getInitialData('disciplineTypes', ['Trừ 10% KPI', 'Cảnh cáo', 'Sa thải']));
   const [proposals, setProposals] = useState(() => getInitialData('proposals', []));
-
-  // 4. Dữ liệu Tasks
   const [tasks, setTasks] = useState(() => getInitialData('tasks', []));
   const [attendanceLogs, setAttendanceLogs] = useState(() => getInitialData('attendanceLogs', []));
   const [facilityLogs, setFacilityLogs] = useState(() => getInitialData('facilityLogs', []));
 
-  // --- PERSISTENCE ---
-  useEffect(() => { localStorage.setItem('staffList', JSON.stringify(staffList)); }, [staffList]);
+  // --- PERSISTENCE (Cho các dữ liệu LocalStorage) ---
   useEffect(() => { localStorage.setItem('tasks', JSON.stringify(tasks)); }, [tasks]);
   useEffect(() => { localStorage.setItem('disciplineTypes', JSON.stringify(disciplineTypes)); }, [disciplineTypes]);
   useEffect(() => { localStorage.setItem('proposals', JSON.stringify(proposals)); }, [proposals]);
 
-  // --- ACTIONS ---
+  // --- ACTIONS (Cập nhật để gọi API) ---
 
-  // STAFF ACTIONS
-  const addStaff = (s) => setStaffList([...staffList, { ...s, id: Date.now(), status: 'active' }]);
-  const deleteStaff = (id) => setStaffList(staffList.filter(staff => staff.id !== id));
-  const updatePassword = (id, newPass) => setStaffList(staffList.map(s => s.id === id ? { ...s, password: newPass } : s));
-  
-  // Hàm cập nhật trạng thái (Đình chỉ/Mở lại) HOẶC Bổ nhiệm Role
-  const updateStaffInfo = (id, updates) => {
-    setStaffList(staffList.map(s => s.id === id ? { ...s, ...updates } : s));
+  // STAFF ACTIONS (Đã update Fetch)
+  const addStaff = (s) => {
+    const newStaff = { ...s, id: Date.now(), status: 'active' };
+    
+    // Cập nhật UI ngay
+    setStaffList([...staffList, newStaff]);
+    
+    // Lưu xuống file db.json
+    fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newStaff)
+    });
   };
 
-  // DISCIPLINE ACTIONS
+  const deleteStaff = (id) => {
+    // Cập nhật UI
+    setStaffList(staffList.filter(staff => staff.id !== id));
+    
+    // Xóa trong file db.json
+    fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+  };
+
+  const updatePassword = (id, newPass) => {
+    updateStaffInfo(id, { password: newPass });
+  };
+  
+  // Hàm cập nhật thông tin chung (dùng cho cả Edit, Appoint, Suspend)
+  const updateStaffInfo = (id, updates) => {
+    // Cập nhật UI
+    setStaffList(staffList.map(s => s.id === id ? { ...s, ...updates } : s));
+    
+    // Cập nhật file db.json (PATCH)
+    fetch(`${API_URL}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+  };
+
+  // --- CÁC ACTION KHÁC (Giữ nguyên logic cũ) ---
   const addDisciplineType = (type) => setDisciplineTypes([...disciplineTypes, type]);
   const removeDisciplineType = (type) => setDisciplineTypes(disciplineTypes.filter(t => t !== type));
   
@@ -56,20 +84,13 @@ export const DataProvider = ({ children }) => {
     setProposals(proposals.map(p => p.id === id ? { ...p, status: status } : p));
   };
 
-  // TASK ACTIONS
-  const addTask = (t) => setTasks([...tasks, { 
-    ...t, id: Date.now(), progress: 0, reason: '', completedDate: null 
-  }]);
-  
+  const addTask = (t) => setTasks([...tasks, { ...t, id: Date.now(), progress: 0, reason: '', completedDate: null }]);
   const updateTask = (taskId, newDat) => {
     setTasks(tasks.map(t => t.id === taskId ? { ...t, ...newDat } : t));
   };
-
   const updateTaskProgress = (id, p, reason = '') => {
     const now = new Date().toISOString().split('T')[0];
-    setTasks(tasks.map(t => 
-      t.id === id ? { ...t, progress: p, reason: reason, completedDate: p === 100 ? now : null } : t
-    ));
+    setTasks(tasks.map(t => t.id === id ? { ...t, progress: p, reason: reason, completedDate: p === 100 ? now : null } : t));
   };
 
   const addAttendance = (log) => setAttendanceLogs([...attendanceLogs, log]);

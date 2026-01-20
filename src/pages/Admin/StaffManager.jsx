@@ -3,14 +3,22 @@ import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 
 const StaffManager = () => {
-  const { user } = useAuth(); // Lấy thông tin người đang login
+  const { user } = useAuth();
   const { staffList, addStaff, deleteStaff, updatePassword, updateStaffInfo } = useData();
+  
+  // State thêm mới
   const [formData, setFormData] = useState({ name: '', username: '', password: '' });
   
-  // State quản lý việc bổ nhiệm
-  const [appointMode, setAppointMode] = useState(null); // ID của user đang được bổ nhiệm
+  // State chỉnh sửa
+  const [editMode, setEditMode] = useState(null); // ID của user đang sửa
+  const [editForm, setEditForm] = useState({});   // Dữ liệu form sửa
+  
+  // State bổ nhiệm
+  const [appointMode, setAppointMode] = useState(null);
 
   const isChief = user?.role === 'chief';
+
+  // --- CÁC HÀM XỬ LÝ ---
 
   const handleAdd = (e) => {
     e.preventDefault();
@@ -48,6 +56,24 @@ const StaffManager = () => {
     alert("Đã bổ nhiệm thành công!");
   };
 
+  // --- LOGIC CHỈNH SỬA ---
+  const startEdit = (staff) => {
+    setEditMode(staff.id);
+    setEditForm({
+      name: staff.name,
+      phone: staff.phone || '',
+      email: staff.email || '',
+      department: staff.department || '',
+      title: staff.title || ''
+    });
+  };
+
+  const saveEdit = (id) => {
+    updateStaffInfo(id, editForm);
+    setEditMode(null);
+    alert("Cập nhật thông tin thành công!");
+  };
+
   const roleName = (r) => {
     if(r === 'chief') return 'Chief Admin';
     if(r === 'reg') return 'Regulatory Admin';
@@ -59,7 +85,7 @@ const StaffManager = () => {
     <div>
       <h2 style={{color: '#003366'}}>Quản lý & Bổ nhiệm Nhân sự</h2>
       
-      {/* Chỉ Chief mới thấy Form thêm nhân sự */}
+      {/* Form thêm mới (Chỉ Chief thấy) */}
       {isChief && (
         <form onSubmit={handleAdd} style={{ marginBottom: '20px', padding: '20px', background: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}>
           <h4 style={{marginTop: 0, color: '#003366'}}>+ Thêm nhân sự mới</h4>
@@ -72,12 +98,13 @@ const StaffManager = () => {
         </form>
       )}
 
+      {/* Bảng danh sách */}
       <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead style={{ background: '#f5f7fa', color: '#666', borderBottom: '2px solid #eee' }}>
             <tr>
               <th style={{ padding: '12px' }}>Thông tin</th>
-              <th style={{ padding: '12px' }}>Vai trò hiện tại</th>
+              <th style={{ padding: '12px' }}>Vai trò</th>
               <th style={{ padding: '12px' }}>Trạng thái</th>
               <th style={{ padding: '12px' }}>Thao tác quản trị</th>
             </tr>
@@ -85,44 +112,88 @@ const StaffManager = () => {
           <tbody>
             {staffList.map(staff => (
               <tr key={staff.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '12px' }}>
-                    <strong>{staff.name}</strong> <br/> <small style={{color: '#888'}}>@{staff.username}</small>
+                
+                {/* Cột 1: Thông tin (Hiển thị hoặc Input sửa) */}
+                <td style={{ padding: '12px', verticalAlign: 'top' }}>
+                    {editMode === staff.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Họ tên" style={{padding: '5px', width: '100%'}}/>
+                            <div style={{display: 'flex', gap: '5px'}}>
+                                <input value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} placeholder="SĐT" style={{flex: 1, padding: '5px'}}/>
+                                <input value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} placeholder="Email" style={{flex: 1, padding: '5px'}}/>
+                            </div>
+                            <div style={{display: 'flex', gap: '5px'}}>
+                                <input value={editForm.department} onChange={e => setEditForm({...editForm, department: e.target.value})} placeholder="Phòng ban" style={{flex: 1, padding: '5px'}}/>
+                                <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} placeholder="Chức danh" style={{flex: 1, padding: '5px'}}/>
+                            </div>
+                        </div>
+                    ) : (
+                        <div>
+                            <strong>{staff.name}</strong> <br/> 
+                            <small style={{color: '#888'}}>@{staff.username}</small>
+                            {(staff.phone || staff.email) && (
+                                <div style={{fontSize: '0.85rem', marginTop: '4px', color: '#555'}}>
+                                    📞 {staff.phone || '--'} | ✉️ {staff.email || '--'}
+                                </div>
+                            )}
+                            {(staff.department || staff.title) && (
+                                <div style={{fontSize: '0.85rem', color: '#003366', fontStyle: 'italic', marginTop: '2px'}}>
+                                    🏢 {staff.department || 'Chưa xếp phòng'} - {staff.title || 'N/A'}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </td>
-                <td style={{ padding: '12px', color: '#003366', fontWeight: 'bold' }}>
+                
+                {/* Cột 2: Vai trò */}
+                <td style={{ padding: '12px', color: '#003366', fontWeight: 'bold', verticalAlign: 'top' }}>
                     {roleName(staff.role)}
                 </td>
-                <td style={{ padding: '12px' }}>
+                
+                {/* Cột 3: Trạng thái */}
+                <td style={{ padding: '12px', verticalAlign: 'top' }}>
                     {staff.status === 'suspended' ? 
                         <span style={{color: 'red', fontWeight: 'bold'}}>Đã đình chỉ</span> : 
                         <span style={{color: 'green'}}>Hoạt động</span>}
                 </td>
-                <td style={{ padding: '12px' }}>
+                
+                {/* Cột 4: Thao tác (Đã sửa lỗi) */}
+                <td style={{ padding: '12px', verticalAlign: 'top' }}>
                   {isChief ? (
                     <div style={{display: 'flex', gap: '5px', flexWrap: 'wrap'}}>
-                      {appointMode === staff.id ? (
+                      {editMode === staff.id ? (
                         <>
-                          <select onChange={(e) => handleAppoint(staff.id, e.target.value)} defaultValue="" style={{padding: '5px'}}>
-                            <option value="" disabled>Chọn cấp độ...</option>
-                            <option value="staff">Staff (Nhân viên)</option>
-                            <option value="op">Operational Admin</option>
-                            <option value="reg">Regulatory Admin</option>
-                          </select>
-                          <button onClick={() => setAppointMode(null)} style={{background: '#999', color: 'white', border: 'none', borderRadius: '4px'}}>Hủy</button>
+                           <button onClick={() => saveEdit(staff.id)} style={{background: '#28a745', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'}}>Lưu</button>
+                           <button onClick={() => setEditMode(null)} style={{background: '#999', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'}}>Hủy</button>
                         </>
                       ) : (
-                        <button 
-                            onClick={() => setAppointMode(staff.id)}
-                            style={{background: '#003366', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', boxShadow: '0 2px 0 #002244'}}
-                        >
-                            🎖️ Bổ nhiệm
-                        </button>
+                        <>
+                           {/* Nút sửa */}
+                           <button onClick={() => startEdit(staff)} style={{background: '#007bff', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'}}>✏️ Sửa</button>
+
+                           {/* Nút bổ nhiệm */}
+                           {appointMode === staff.id ? (
+                            <>
+                              <select onChange={(e) => handleAppoint(staff.id, e.target.value)} defaultValue="" style={{padding: '5px'}}>
+                                <option value="" disabled>Chọn...</option>
+                                <option value="staff">Staff</option>
+                                <option value="op">Op Admin</option>
+                                <option value="reg">Reg Admin</option>
+                              </select>
+                              <button onClick={() => setAppointMode(null)} style={{background: '#999', color: 'white', border: 'none', borderRadius: '4px'}}>x</button>
+                            </>
+                          ) : (
+                            <button onClick={() => setAppointMode(staff.id)} style={{background: '#003366', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'}}>🎖️</button>
+                          )}
+                          
+                          {/* Nút đình chỉ & các nút khác */}
+                          <button onClick={() => toggleSuspend(staff)} style={{background: staff.status === 'suspended'?'#28a745':'#d32f2f', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'}}>
+                            {staff.status === 'suspended' ? 'Mở' : 'Đình'}
+                          </button>
+                          <button onClick={() => handleResetPassword(staff.id)} style={{background: '#ffc107', color: 'black', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'}}>MK</button>
+                          <button onClick={() => handleDelete(staff.id)} style={{background: '#666', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'}}>Xóa</button>
+                        </>
                       )}
-                      
-                      <button onClick={() => toggleSuspend(staff)} style={{background: staff.status === 'suspended'?'#28a745':'#d32f2f', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'}}>
-                        {staff.status === 'suspended' ? 'Mở lại' : 'Đình chỉ'}
-                      </button>
-                      <button onClick={() => handleResetPassword(staff.id)} style={{background: '#ffc107', color: 'black', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'}}>MK</button>
-                      <button onClick={() => handleDelete(staff.id)} style={{background: '#666', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer'}}>Xóa</button>
                     </div>
                   ) : (
                     <span style={{color: '#999', fontStyle: 'italic'}}>Chỉ xem</span>
