@@ -6,14 +6,17 @@ import { useData } from '../context/DataContext';
 const LoginForm = () => {
   const [form, setForm] = useState({ user: '', pass: '' });
   const { login } = useAuth();
-  const { staffList } = useData();
+  const { staffList } = useData(); // Lấy dữ liệu từ Context
   const navigate = useNavigate();
 
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Tìm user trong danh sách staffList
-    const account = staffList.find(s => s.username === form.user && s.password === form.pass);
+    // KHẮC PHỤC: Kiểm tra an toàn xem staffList có phải là mảng không
+    const safeStaffList = Array.isArray(staffList) ? staffList : [];
+
+    // Tìm user trong danh sách an toàn
+    const account = safeStaffList.find(s => s.username === form.user && s.password === form.pass);
 
     if (account) {
         if (account.status === 'suspended') {

@@ -8,14 +8,20 @@ export const DataProvider = ({ children }) => {
   // --- STATES ---
   const [staffList, setStaffList] = useState([]);
   const [tasks, setTasks] = useState([]);
+  // THÊM MỚI: State cho Ca làm việc và Chấm công
+  const [shifts, setShifts] = useState([]);
+  const [attendanceLogs, setAttendanceLogs] = useState([]);
   
-  // LocalStorage cho dữ liệu cấu hình (Regulatory ban hành)
+  // LocalStorage cho dữ liệu cấu hình
   const getInitialData = (key, defaultValue) => {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : defaultValue;
+    try {
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : defaultValue;
+    } catch {
+      return defaultValue;
+    }
   };
 
-  // Danh sách hình thức kỷ luật (Do Regulatory quản lý)
   const [disciplineTypes, setDisciplineTypes] = useState(() => getInitialData('disciplineTypes', [
     'Nhắc nhở miệng',
     'Trừ 5% KPI tháng',
@@ -23,46 +29,52 @@ export const DataProvider = ({ children }) => {
     'Đình chỉ công tác'
   ]));
 
-  // Danh sách đề xuất kỷ luật (Do Op đề xuất, Reg duyệt)
   const [proposals, setProposals] = useState(() => getInitialData('proposals', []));
 
   // --- FIREBASE LISTENERS ---
   useEffect(() => {
-    // STAFF
+    // 1. STAFF
     const staffRef = ref(db, 'staff');
     const unsubStaff = onValue(staffRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        const list = Object.keys(data).map(key => ({
-          ...data[key],
-          id: key, // Đảm bảo ID là key của Firebase để tránh trùng lặp
-          positions: data[key].positions || [], 
-          baseUBI: data[key].baseUBI || 0,
-          ubiPercentage: data[key].ubiPercentage || 100,
-          status: data[key].status || 'active'
-        }));
-        setStaffList(list);
-      } else {
-        setStaffList([]);
-      }
+      const list = data ? Object.keys(data).map(key => ({ 
+        ...data[key], 
+        id: key, 
+        positions: data[key].positions || [] 
+      })) : [];
+      setStaffList(list);
     });
 
-    // TASKS
+    // 2. TASKS
     const tasksRef = ref(db, 'tasks');
     const unsubTasks = onValue(tasksRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        const list = Object.keys(data).map(key => ({
-          ...data[key],
-          id: key // ID task
-        }));
-        setTasks(list);
-      } else {
-        setTasks([]);
-      }
+      const list = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : [];
+      setTasks(list);
     });
 
-    return () => { unsubStaff(); unsubTasks(); };
+    // 3. SHIFTS (THÊM MỚI: Lắng nghe dữ liệu Ca làm việc)
+    const shiftsRef = ref(db, 'shifts');
+    const unsubShifts = onValue(shiftsRef, (snapshot) => {
+      const data = snapshot.val();
+      const list = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : [];
+      setShifts(list);
+    });
+
+    // 4. ATTENDANCE (THÊM MỚI: Lắng nghe dữ liệu Chấm công)
+    const attRef = ref(db, 'attendance');
+    const unsubAtt = onValue(attRef, (snapshot) => {
+      const data = snapshot.val();
+      const list = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : [];
+      setAttendanceLogs(list);
+    });
+
+    return () => { 
+      unsubStaff(); 
+      unsubTasks();
+      unsubShifts();
+      unsubAtt();
+    };
   }, []);
 
   // --- SYNC LOCALSTORAGE ---
@@ -71,16 +83,16 @@ export const DataProvider = ({ children }) => {
 
   // --- ACTIONS ---
 
-  // 1. STAFF
+  // Staff
   const addStaff = (s) => {
-    const newId = Date.now().toString(); // Dùng String ID
+    const newId = Date.now().toString();
     set(ref(db, 'staff/' + newId), { ...s, id: newId });
   };
   const deleteStaff = (id) => remove(ref(db, 'staff/' + id));
   const updateStaffInfo = (id, updates) => update(ref(db, 'staff/' + id), updates);
   const updatePassword = (id, newPass) => updateStaffInfo(id, { password: newPass });
 
-  // 2. TASKS (Operational)
+  // Tasks
   const addTask = (t) => {
     const newId = Date.now().toString();
     set(ref(db, 'tasks/' + newId), { 
@@ -94,23 +106,27 @@ export const DataProvider = ({ children }) => {
   const updateTask = (taskId, newData) => update(ref(db, 'tasks/' + taskId), newData);
   const deleteTask = (taskId) => remove(ref(db, 'tasks/' + taskId));
 
-  // 3. DISCIPLINE (Regulatory & Op)
+  // Discipline
   const addDisciplineType = (type) => setDisciplineTypes([...disciplineTypes, type]);
   const removeDisciplineType = (type) => setDisciplineTypes(disciplineTypes.filter(t => t !== type));
-  
-  // Op đề xuất, Reg duyệt
   const addProposal = (prop) => setProposals([...proposals, { ...prop, id: Date.now(), status: 'Pending' }]);
-  const updateProposalStatus = (id, status) => {
-    setProposals(proposals.map(p => p.id === id ? { ...p, status: status } : p));
-  };
+  const updateProposalStatus = (id, status) => setProposals(proposals.map(p => p.id === id ? { ...p, status: status } : p));
   const deleteProposal = (id) => setProposals(proposals.filter(p => p.id !== id));
+
+  // THÊM MỚI: Attendance Actions
+  const addAttendance = (log) => {
+    const newId = Date.now().toString();
+    set(ref(db, 'attendance/' + newId), { ...log, id: newId });
+  };
 
   return (
     <DataContext.Provider value={{ 
       staffList, addStaff, deleteStaff, updatePassword, updateStaffInfo,
       tasks, addTask, updateTask, deleteTask,
       disciplineTypes, addDisciplineType, removeDisciplineType,
-      proposals, addProposal, updateProposalStatus, deleteProposal
+      proposals, addProposal, updateProposalStatus, deleteProposal,
+      // QUAN TRỌNG: Phải export các biến này ra
+      shifts, attendanceLogs, addAttendance
     }}>
       {children}
     </DataContext.Provider>

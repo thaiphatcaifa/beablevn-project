@@ -5,16 +5,24 @@ import { formatDate } from '../../utils/helpers';
 
 const Attendance = () => {
   const { user } = useAuth();
+  // Lấy dữ liệu từ Context (Đã được sửa ở DataContext.js)
   const { addAttendance, attendanceLogs, staffList, shifts } = useData();
+  
   const [currentShift, setCurrentShift] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // 1. Lấy thông tin Ca làm việc của User hiện tại
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    const currentUserData = staffList.find(s => s.id === user.id);
+    
+    // An toàn: Đảm bảo staffList và shifts là mảng trước khi find
+    const safeStaffList = Array.isArray(staffList) ? staffList : [];
+    const safeShifts = Array.isArray(shifts) ? shifts : [];
+
+    const currentUserData = safeStaffList.find(s => String(s.id) === String(user.id));
+    
     if (currentUserData && currentUserData.shiftId) {
-      const shift = shifts.find(s => String(s.id) === String(currentUserData.shiftId));
+      const shift = safeShifts.find(s => String(s.id) === String(currentUserData.shiftId));
       setCurrentShift(shift);
     }
     return () => clearInterval(timer);
@@ -65,17 +73,24 @@ const Attendance = () => {
       alert("✅ Check-out thành công! Hẹn gặp lại.");
     }
 
-    addAttendance({
-      staffName: user.name,
-      staffId: user.id,
-      type: type,
-      shiftName: currentShift.name,
-      statusNote: statusNote, 
-      time: now
-    });
+    // Gọi hàm từ Context
+    if (addAttendance) {
+        addAttendance({
+            staffName: user.name,
+            staffId: user.id,
+            type: type,
+            shiftName: currentShift.name,
+            statusNote: statusNote, 
+            time: now.toISOString() // Nên lưu dạng chuỗi ISO để an toàn trên Firebase
+        });
+    } else {
+        alert("Lỗi hệ thống: Không tìm thấy chức năng addAttendance.");
+    }
   };
 
-  const myHistory = attendanceLogs.filter(l => l.staffId === user.id);
+  // FIX LỖI CRASH Ở ĐÂY: Kiểm tra attendanceLogs có phải là mảng không trước khi filter
+  const safeAttendanceLogs = Array.isArray(attendanceLogs) ? attendanceLogs : [];
+  const myHistory = safeAttendanceLogs.filter(l => String(l.staffId) === String(user.id));
 
   return (
     <div>
@@ -149,7 +164,6 @@ const Attendance = () => {
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {myHistory.length === 0 && <p style={{ fontStyle: 'italic', color: '#999' }}>Chưa có dữ liệu điểm danh.</p>}
         {myHistory.slice().reverse().map((h, i) => {
-          // --- SỬA LỖI Ở ĐÂY: Kiểm tra nếu statusNote không tồn tại thì gán chuỗi rỗng ---
           const safeNote = h.statusNote || 'Dữ liệu cũ';
           const isLate = safeNote.includes('Trễ');
           
